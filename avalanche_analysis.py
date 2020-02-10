@@ -64,13 +64,19 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
 	fit_gamma,_,_ = fit_powerlaw(S_avg[:,0],S_avg[:,1],S_avg[:,2], loglog=True)
 	str_label = label + r': $\gamma$ = {:0.3f}'.format(fit_gamma)
 	ax_avgS.plot(S_avg[:,0],S_avg[:,1], label=str_label, color=color)
+	ax_avgS.plot(S_avg[:,0], np.power(S_avg[:,0], fit_gamma), color='k', linestyle='--')
 
 	#Fits and plots the average avalanche shape
 	fit_gamma_shape = fit_collapse(shape_list, 4, 20, extrapolate=True)
-	print(label + 'gamma_shape = {:0.2f}'.format(fit_gamma_shape))
-	#fit_gamma_shape = 2.0
 	str_leg = label + r': $\gamma_s$ = {:0.2f}'.format(fit_gamma_shape)
-	plot_collapse(shape_list,fit_gamma_shape,4,20,ax_shape, None, True, color, show_subplots=False)
+	plot_collapse(shape_list,fit_gamma_shape,4,20,ax_shape, str_leg, True, color, show_subplots=False)
+
+	print('== Exponents for {:s} =='.format(label))
+	print('alpha = {:0.3f}'.format(fit_pS.power_law.alpha))
+	print('beta = {:0.3f}'.format(fit_pD.power_law.alpha))
+	print('gamma_scaling = {:0.3f}'.format((fit_pD.power_law.alpha-1)/(fit_pS.power_law.alpha-1)))
+	print('gamma = {:0.3f}'.format(fit_gamma))
+	print('gamma_shape = {:0.3f}'.format(fit_gamma_shape))
 
 	#Beautifies plots
 	plt.sca(ax_pS)
@@ -89,8 +95,6 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
 	plt.ylim([1,1e5])
 	ax_avgS.set_xscale('log')
 	ax_avgS.set_yscale('log')
-	plt.sca(ax_shape)
-	plt.legend()
 
 def fit_collapse(flat_list, min_d, min_rep, extrapolate=False):
 
@@ -258,25 +262,27 @@ def plot_collapse(flat_list, gamma_shape, min_rep=10,min_d = 4, ax=None, str_leg
 
 		#Plots transparent subplots
 		if show_subplots:
-			plt.plot(avg_shape_i_x, avg_shape_i_y, alpha=0.2, color=color)
+			ax.plot(avg_shape_i_x, avg_shape_i_y, alpha=0.2, color=color)
 
 	#Plots interpolated average curve
 	if show_subplots:
 		color_collapse = 'k'
 	else:
 		color_collapse = color
-	plt.plot(x_range, np.mean(average_shape, axis=0), color=color_collapse, linewidth=2)
+	plot_line, = ax.plot(x_range, np.mean(average_shape, axis=0), color=color_collapse, linewidth=2, label=str_leg)
+	ax.legend([plot_line], [str_leg])
+	plt.legend()
 
 	#Beautifies plot
 	ax.set_xlabel('Scaled time')
 	ax.set_ylabel('Scaled activity')
 	plt.xlim([0,1])
-	if extrapolate is True:
-		_,ylim_1 = ax.get_ylim()
-		ax.set_ylim([y_min, ylim_1])
-	if str_leg is not None:
-		#plt.text(0.95, 0.95, str_leg, horizontalalignment='right',verticalalignment='top', transform=ax.transAxes, bbox=dict(facecolor='none', alpha=0.5))
-		plt.text(0.95, 0.95, str_leg, horizontalalignment='right',verticalalignment='top', transform=ax.transAxes)
+	# if extrapolate is True:
+	# 	_,ylim_1 = ax.get_ylim()
+	# 	ax.set_ylim([y_min, ylim_1])
+	# if str_leg is not None:
+	# 	#plt.text(0.95, 0.95, str_leg, horizontalalignment='right',verticalalignment='top', transform=ax.transAxes, bbox=dict(facecolor='none', alpha=0.5))
+	# 	plt.text(0.95, 0.95, str_leg, horizontalalignment='right',verticalalignment='top', transform=ax.transAxes)
 
 def get_avalanches(data):
 	"""Returns a dict with shape, size and duration of all avalanches
