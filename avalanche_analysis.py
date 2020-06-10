@@ -45,6 +45,8 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
     D_list = [avalanches[i]['D'] for i in avalanches.keys()]
     shape_list = [avalanches[i]['shape'] for i in avalanches.keys()]
 
+    print('Calculating')
+
     #Calculates S_avg
     S_avg = np.zeros((np.max(D_list),3))
     for i in range(np.max(D_list)):
@@ -53,29 +55,34 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
         S_avg[i,1] = np.mean(S_D)
         S_avg[i,2] = np.std(S_D)
 
-    #Plots p(S)
+    #Fits distributions
     fit_pS = powerlaw.Fit(S_list,xmin=1)
+    fit_pD = powerlaw.Fit(D_list,xmin=1)
+    fit_gamma,_,_ = fit_powerlaw(S_avg[:,0],S_avg[:,1],S_avg[:,2], loglog=True)
+    fit_gamma_shape = fit_collapse(shape_list, 4, 20, extrapolate=True)
+
+    print('Plotting')
+
+    #Plots p(S)
     str_label = label + r': $\alpha$ = {:0.3f}'.format(fit_pS.power_law.alpha)
     fit_pS.plot_pdf(ax=ax_pS, color=color, **{'label':str_label})
     fit_pS.power_law.plot_pdf(ax=ax_pS,color='k', linestyle='--')
 
     #Plots p(D)
-    fit_pD = powerlaw.Fit(D_list,xmin=1)
     str_label = label + r': $\beta$ = {:0.3f}'.format(fit_pD.power_law.alpha)
     fit_pD.plot_pdf(ax=ax_pD, color= color, **{'label':str_label})
     fit_pD.power_law.plot_pdf(ax=ax_pD, color='k', linestyle='--')
 
     #Plots <S>(D)
-    fit_gamma,_,_ = fit_powerlaw(S_avg[:,0],S_avg[:,1],S_avg[:,2], loglog=True)
     str_label = label + r': $\gamma$ = {:0.3f}'.format(fit_gamma)
     ax_avgS.plot(S_avg[:,0],S_avg[:,1], label=str_label, color=color)
     ax_avgS.plot(S_avg[:,0], np.power(S_avg[:,0], fit_gamma), color='k', linestyle='--')
 
-    #Fits and plots the average avalanche shape
-    fit_gamma_shape = fit_collapse(shape_list, 4, 20, extrapolate=True)
+    #Plots the average avalanche shape
     str_leg = label + r': $\gamma_s$ = {:0.2f}'.format(fit_gamma_shape)
     plot_collapse(shape_list,fit_gamma_shape,4,20,ax_shape, str_leg, True, color, show_subplots=False)
 
+    #Prints results
     print('== Exponents for {:s} =='.format(label))
     print('alpha = {:0.3f}'.format(fit_pS.power_law.alpha))
     print('beta = {:0.3f}'.format(fit_pD.power_law.alpha))
@@ -308,7 +315,6 @@ def get_avalanches(data):
     else:
         ValueError('data.ndim > 2')
 
-
 def _get_avalanches_single(data):
     """Returns a dict with shape, size and duration of all avalanches
     
@@ -359,3 +365,26 @@ def _get_avalanches_trial(data):
         avalanches[i]['D'] = len(avalanches[i]['shape'])
 
     return avalanches
+
+def simulate_bp(m, trials, timesteps = 10000, A0=1):
+    """Simulates a simple branching process without drive.
+    
+    Args:
+        m (float): branching parameter
+        trials (int): number of trials to return
+        timesteps (int, optional): maximum number of timesteps in each trial
+        A0 (int, optional): number of units to activate in the beginning
+    
+    Returns:
+        ndarray: array (trials, timesteps) with activity from the bp.
+    """
+    At = np.zeros((trials, timesteps), dtype=int)
+    At[:,0] = int(A0)
+
+    for i in range(trials):
+        for j in range(1,timesteps):
+            At[i,j] = np.sum(np.random.poisson(m,At[i,j-1]))
+            if At[i,j] == 0:
+                break
+
+    return At

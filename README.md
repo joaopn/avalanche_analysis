@@ -4,12 +4,13 @@ Simple avalanche analysis of timeseries. It depends on the following packages: `
 It accepts two types of data:
 
 *a single timeseries `A = [1,2,0,1,1,0]` with separation of timescales (`A[i] = 0`).
-*a list of discrete avalanches `A = [[1,2],[1,1]]`.
+*a 2-D array of separate trials: `A = [[1,2,1,0,0],[1,3,0,0,0]]`
 
-To run it we use:
+Example usage:
 
 ```
 import avalanche_analysis
+A = avalanche_analysis.simulate_bp(m=1,trials=1000)
 avalanche_analysis.run_analysis(data=A)
-!["avalanche analysis"](analysis.png)
+!["avalanche analysis"](example.png)
 ```
