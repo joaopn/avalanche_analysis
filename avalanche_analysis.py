@@ -6,6 +6,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import powerlaw
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import InterpolatedUnivariateSpline
@@ -16,18 +17,21 @@ TODO
 - Substitute RMSE fitting by MLE
 '''
 
-def run_analysis(data, newFig=True, label='Data', color='k'):
+def full_analysis(data, newFig=True, label='Data', color='k', comparison = 'fit', collapse_subplots = False, collapse_extrapolate=False, savefig=False):
     """Runs the complete avalanche analysis.
     
     Args:
-        data (float): Input data, in either a thresholded (1D) or trial-based structure
+        data (float): Input data, either an ndarray with a thresholded (1D) or trial-based structure, or a dict.
         newFig (bool, optional): whether to use a new figure for plotting
         label (str, optional): label to plot
         color (str, optional): color to plot.
+        comparison (str, optional): which line to compare to. Values: 'fit', 'BP', None
+        collapse_subplots (bool, optional): whether to show the individual shapes
+        collapse_extrapolate (bool, optional): whether to extrapolate shape collapse beyond the data limit
     """
     #Sets up figure
     if newFig is True:
-        fig = plt.figure(figsize=(18,12))
+        fig = plt.figure(figsize=(8,6))
         gs = fig.add_gridspec(2,2)
         ax_pS = fig.add_subplot(gs[0,0])
         ax_pD = fig.add_subplot(gs[0,1])
@@ -40,12 +44,17 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
         ax_pS,ax_pD,ax_avgS,ax_shape = fig.get_axes()
 
     #Analyzes avalanches
-    avalanches = get_avalanches(data)
+    if type(data) == np.ndarray:
+        avalanches = get_avalanches(data)
+    elif type(data) == dict:
+        avalanches = data
+    else:
+        ValueError('Invalid data type')
+
+    #Builds individual lists
     S_list = [avalanches[i]['S'] for i in avalanches.keys()]
     D_list = [avalanches[i]['D'] for i in avalanches.keys()]
     shape_list = [avalanches[i]['shape'] for i in avalanches.keys()]
-
-    print('Calculating')
 
     #Calculates S_avg
     S_avg = np.zeros((np.max(D_list),3))
@@ -61,26 +70,39 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
     fit_gamma,_,_ = fit_powerlaw(S_avg[:,0],S_avg[:,1],S_avg[:,2], loglog=True)
     fit_gamma_shape = fit_collapse(shape_list, 4, 20, extrapolate=True)
 
-    print('Plotting')
+    #Plots comparison lines
+    if comparison == 'fit':
+        fit_pS.power_law.plot_pdf(ax=ax_pS,color='k', linestyle='--')
+        fit_pD.power_law.plot_pdf(ax=ax_pD, color='k', linestyle='--')
+        ax_avgS.plot(S_avg[:,0], np.power(S_avg[:,0], fit_gamma), color='k', linestyle='--')
 
-    #Plots p(S)
-    str_label = label + r': $\alpha$ = {:0.3f}'.format(fit_pS.power_law.alpha)
-    fit_pS.plot_pdf(ax=ax_pS, color=color, **{'label':str_label})
-    fit_pS.power_law.plot_pdf(ax=ax_pS,color='k', linestyle='--')
+        str_label_S = label + r': $\alpha$ = {:0.3f}'.format(fit_pS.power_law.alpha)
+        str_label_D = label + r': $\beta$ = {:0.3f}'.format(fit_pD.power_law.alpha)
+        str_label_AVG = label + r': $\gamma$ = {:0.3f}'.format(fit_gamma)
+        str_label_shape = label + r': $\gamma_s$ = {:0.2f}'.format(fit_gamma_shape)
 
-    #Plots p(D)
-    str_label = label + r': $\beta$ = {:0.3f}'.format(fit_pD.power_law.alpha)
-    fit_pD.plot_pdf(ax=ax_pD, color= color, **{'label':str_label})
-    fit_pD.power_law.plot_pdf(ax=ax_pD, color='k', linestyle='--')
+    elif comparison == 'BP':
+        BP_S = [3,1e4]
+        BP_D = [3,1e2]
+        BP_AVG = [1,1e2]
 
-    #Plots <S>(D)
-    str_label = label + r': $\gamma$ = {:0.3f}'.format(fit_gamma)
-    ax_avgS.plot(S_avg[:,0],S_avg[:,1], label=str_label, color=color)
-    ax_avgS.plot(S_avg[:,0], np.power(S_avg[:,0], fit_gamma), color='k', linestyle='--')
+        ax_pS.plot(BP_S, 5*np.power(BP_S, -1.5), color='k', linestyle='--')
+        ax_pD.plot(BP_D, 5*np.power(BP_D, -2), color='k', linestyle='--')
+        ax_avgS.plot(BP_AVG, 1 + np.power(BP_AVG, 2), color='k', linestyle='--')
 
+        str_label_S = label
+        str_label_D = label
+        str_label_AVG = label    
+        str_label_shape = label
+
+    #Plots distributions
+    fit_pS.plot_pdf(ax=ax_pS, color=color, **{'label':str_label_S, 'lw':2})
+    fit_pD.plot_pdf(ax=ax_pD, color= color, **{'label':str_label_D, 'lw':2})
+    ax_avgS.plot(S_avg[:,0],S_avg[:,1], label=str_label_AVG, color=color, lw=2)
+    
     #Plots the average avalanche shape
-    str_leg = label + r': $\gamma_s$ = {:0.2f}'.format(fit_gamma_shape)
-    plot_collapse(shape_list,fit_gamma_shape,4,20,ax_shape, str_leg, True, color, show_subplots=False)
+    str_leg_shape = label + r': $\gamma_s$ = {:0.2f}'.format(fit_gamma_shape)
+    plot_collapse(shape_list,fit_gamma_shape,4,20,ax_shape, str_label_shape, extrapolate=collapse_extrapolate, color=color, show_subplots=collapse_subplots)
 
     #Prints results
     print('== Exponents for {:s} =='.format(label))
@@ -93,20 +115,44 @@ def run_analysis(data, newFig=True, label='Data', color='k'):
     #Beautifies plots
     plt.sca(ax_pS)
     plt.legend(loc='upper right')
-    plt.xlabel('S')
+    plt.xlabel('Avalanche size S')
     plt.ylabel('p(S)')
+    plt.xlim(left=1)
+
     plt.sca(ax_pD)
     plt.legend(loc='upper right')
-    plt.xlabel('D')
+    plt.xlabel('Avalanche duration D')
     plt.ylabel('p(D)')
+    plt.xlim(left=1)
+
     plt.sca(ax_avgS)
     plt.legend(loc='upper left')
-    plt.xlabel('D')
-    plt.ylabel(r'$\langle S \rangle$ (D)')
-    plt.xlim([1,1e3])
-    plt.ylim([1,1e5])
+    plt.xlabel('Avalanche duration D')
+    plt.ylabel(r'Average avalanche size $\langle S \rangle$ (D)')
+    plt.xlim(left=1)
     ax_avgS.set_xscale('log')
     ax_avgS.set_yscale('log')
+
+    # #Fixes minor ticks
+    # locmaj = matplotlib.ticker.LogLocator(base=10,numticks=12) 
+    # locmin = matplotlib.ticker.LogLocator(base=10.0,subs=(0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9),numticks=12)
+    # for axis in [ax_pS, ax_pD]:
+    #     x_current = axis.get_xlim()
+    #     axis.set_xlim([1,1e10])
+
+    #     #axis.xaxis.set_major_locator(locmaj)
+    #     axis.xaxis.set_minor_locator(locmin)
+    #     axis.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    #     axis.yaxis.set_major_locator(locmaj)
+    #     axis.yaxis.set_minor_locator(locmin)
+    #     axis.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    #     axis.set_xlim(x_current)
+
+    plt.tight_layout()
+
+    if savefig is not False:
+        
+        plt.savefig(savefig, dpi=200)
 
 def fit_collapse(flat_list, min_d, min_rep, extrapolate=False):
 
